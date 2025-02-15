@@ -1,79 +1,80 @@
+ 
 import os
 import sys
-from typing import List
-
-from sqlalchemy import create_engine, Enum as SaEnum, ForeignKey, Integer, String, Column
-from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
+from sqlalchemy import Column, ForeignKey, Integer, String, Enum, Table
+from sqlalchemy.orm import relationship, declarative_base, Mapped
 from eralchemy2 import render_er
+from typing import List
 
 Base = declarative_base()
 
-# Tabla de asociación
-# estudiante_curso = Table('estudiante_curso', Base.metadata,
-#     Column('estudiante_id', Integer, ForeignKey('estudiantes.id')),
-#     Column('curso_id', Integer, ForeignKey('cursos.id'))
-# )
-
-#Tabla de asociación
-followers= Table('followers', Base.metadata,
+# Tabla de asociación para seguidores
+followers = Table('followers', Base.metadata,
     Column('user_from_id', Integer, ForeignKey('users.id')),
-    Column('user_to_id', Integer, ForeignKey('users.id')))
-
-
-class Follower(Base):
-    __tablename__ = 'followers'
-    # id: Mapped[int] = mapped_column(primary_key=True) 
-    # user_from_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)  # Seguidos por usuario
-    # user_to_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)  # Seguidores a usuario
-    user_from_id: Mapped["User"] = relationship("User", foreign_keys=[user_from_id], back_populates="followers_from")
-    user_to_id: Mapped["User"] = relationship("User", foreign_keys=[user_to_id], back_populates="followers_to")
-
+    Column('user_to_id', Integer, ForeignKey('users.id'))
+)
 
 class User(Base):
     __tablename__ = 'users'
-    id: Mapped[int] = mapped_column(primary_key=True)  # va a comment, a post y a follower
-    username: Mapped[str] = mapped_column(nullable=False)
-    firstname: Mapped[str] = mapped_column(nullable=False)
-    lastname: Mapped[str] = mapped_column(nullable=False)
-    email: Mapped[str] = mapped_column(nullable=False, unique=True)
-    followers: Mapped[List["Follower"]] = relationship("Follower", secondary=followers, back_populates='users') #Sobra lo de secondary????
-    comments: Mapped[List["Comment"]] = relationship(back_populates="User")
-    posts: Mapped[List["Post"]] = relationship(back_populates="User")
+    id: Mapped[int] = Column(Integer, primary_key=True)  
+    username: Mapped[str] = Column(String, nullable=False)
+    firstname: Mapped[str] = Column(String, nullable=False)
+    lastname: Mapped[str] = Column(String, nullable=False)
+    email: Mapped[str] = Column(String, nullable=False, unique=True)
+    
+    followers_from: Mapped[List["Follower"]] = relationship("Follower", 
+        foreign_keys=[followers.c.user_from_id], back_populates='user_from')
+    followers_to: Mapped[List["Follower"]] = relationship("Follower", 
+        foreign_keys=[followers.c.user_to_id], back_populates='user_to')
+    
+    comments: Mapped[List["Comment"]] = relationship("Comment", back_populates="user")
+    posts: Mapped[List["Post"]] = relationship("Post", back_populates="user")
 
-#1:N 1 usuario muchos comentarios
+# class Follower(Base):
+#     __tablename__ = 'follower'
+    
+#     user_from_id: Mapped[int] = Column(Integer, ForeignKey('users.id'), primary_key=True)
+#     user_to_id: Mapped[int] = Column(Integer, ForeignKey('users.id'), primary_key=True)
+    
+#     user_from: Mapped[User] = relationship("User", foreign_keys=[user_from_id], back_populates="followers_from")
+#     user_to: Mapped[User] = relationship("User", foreign_keys=[user_to_id], back_populates="followers_to")
+
 class Comment(Base):
     __tablename__ = 'comments'
-    id: Mapped[int] = mapped_column(primary_key=True)
-    comment_text: Mapped[str] = mapped_column(nullable=False)
-    author_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)  # Viene desde user
-    users: Mapped["User"] = relationship(back_populates="comments")
-    post_id: Mapped[int] = mapped_column(ForeignKey('posts.id'), nullable=False)  # viene desde post
-    posts: Mapped["Post"] = relationship("Post", back_populates="comments")
+    id: Mapped[int] = Column(Integer, primary_key=True)
+    comment_text: Mapped[str] = Column(String, nullable=False)
+    author_id: Mapped[int] = Column(ForeignKey('users.id'), nullable=False)
+    
+    user: Mapped[User] = relationship(back_populates="comments")
+    post_id: Mapped[int] = Column(ForeignKey('posts.id'), nullable=False)
+    post: Mapped["Post"] = relationship("Post", back_populates="comments")
 
-#1:N 1 usuario muchos posts, 1 post muchos comentarios
 class Post(Base):
     __tablename__ = 'posts'
-    id: Mapped[int] = mapped_column(primary_key=True)  # Clave primaria
-    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
-    users: Mapped["User"] = relationship(back_populates="posts")
-    multimedia: Mapped[List["Media"]] = relationship(back_populates="posts")
-    comments: Mapped[List["Comment"]] = relationship("Comment", back_populates="posts")
+    id: Mapped[int] = Column(Integer, primary_key=True)
+    user_id: Mapped[int] = Column(ForeignKey('users.id'), nullable=False)
+    user: Mapped[User] = relationship(back_populates="posts")
+    
+    multimedia: Mapped[List["Media"]] = relationship("Media", back_populates="post")
+    comments: Mapped[List[Comment]] = relationship("Comment", back_populates="post")
 
-
-#1:N 1 post muchos media
 class Media(Base):
     __tablename__ = 'media'
-    id: Mapped[int] = mapped_column(primary_key=True)
-    type: Mapped[Enum] = mapped_column(Enum('image', 'video'), nullable=False)  # Especificar tipos
-    url: Mapped[str] = mapped_column(nullable=False)
-    post_id: Mapped[int] = mapped_column(ForeignKey('posts.id'), nullable=False)
-    posts: Mapped["Post"] = relationship(back_populates="multimedia")
-
+    id: Mapped[int] = Column(Integer, primary_key=True)
+    type: Mapped[str] = Column(Enum('image', 'video'), nullable=False)
+    url: Mapped[str] = Column(String, nullable=False)
+    post_id: Mapped[int] = Column(ForeignKey('posts.id'), nullable=False)
+    post: Mapped[Post] = relationship(back_populates="multimedia")
 
     def to_dict(self):
-        return {}
+        return {
+            # 'id': self.id,
+            # 'type': self.type,
+            # 'url': self.url,
+            # 'post_id': self.post_id
+        }
 
-## Draw from SQLAlchemy base
+# Generar el diagrama
 try:
     result = render_er(Base, 'diagram.png')
     print("Success! Check the diagram.png file")
